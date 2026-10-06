@@ -77,8 +77,27 @@ interface Hierarchy {
  */
 fun Hierarchy.filter(nodeIdPredicate: (Int) -> Boolean): Hierarchy {
   // todo implement
+  val keptIds = IntArray(size)
+  val keptDepths = IntArray(size)
+  var keptCount = 0
+  var excludedDepth = Int.MAX_VALUE // depth of excluded subtree root
 
-  return ArrayBasedHierarchy(IntArray(0), IntArray(0))
+  for (index in 0 until size) {
+    val depth = depth(index)
+    if (depth > excludedDepth) continue // descendant of an excluded node
+
+    val nodeId = nodeId(index)
+    if (nodeIdPredicate(nodeId)) {
+      keptIds[keptCount] = nodeId
+      keptDepths[keptCount] = depth
+      keptCount++
+      excludedDepth = Int.MAX_VALUE
+    } else {
+      excludedDepth = depth
+    }
+  }
+
+  return ArrayBasedHierarchy(keptIds.copyOf(keptCount), keptDepths.copyOf(keptCount))
 }
 
 class ArrayBasedHierarchy(
@@ -104,4 +123,102 @@ class FilterTest {
       intArrayOf(0, 1, 1, 0, 1, 2))
     assertEquals(filteredExpected.formatString(), filteredActual.formatString())
   }
+
+  @Test
+  fun testRemovedParentRemovesPassingChildren() {
+    // 1
+    // - 2   <- removed
+    // - - 3 <- passes but parent 2 is removed
+    // - 4
+    val unfiltered: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(1, 2, 3, 4),
+      intArrayOf(0, 1, 2, 1))
+    val filteredActual: Hierarchy = unfiltered.filter { nodeId -> nodeId != 2 }
+    val filteredExpected: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(1, 4),
+      intArrayOf(0, 1))
+    assertEquals(filteredExpected.formatString(), filteredActual.formatString())
+  }
+
+  @Test
+  fun testEmptyHierarchy() {
+    val unfiltered: Hierarchy = ArrayBasedHierarchy(IntArray(0), IntArray(0))
+    val filteredActual: Hierarchy = unfiltered.filter { true }
+    assertEquals("[]", filteredActual.formatString())
+  }
+
+  @Test
+  fun testRemovedRootKeepsOtherTrees() {
+    // 1      <- removed, whole tree goes
+    // - 2
+    // 3
+    // - 4
+    val unfiltered: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(1, 2, 3, 4),
+      intArrayOf(0, 1, 0, 1))
+    val filteredActual: Hierarchy = unfiltered.filter { nodeId -> nodeId != 1 }
+    val filteredExpected: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(3, 4),
+      intArrayOf(0, 1))
+    assertEquals(filteredExpected.formatString(), filteredActual.formatString())
+  }
+
+  @Test
+  fun testKeepAll() {
+    val unfiltered: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(1, 2, 3),
+      intArrayOf(0, 1, 2))
+    val filteredActual: Hierarchy = unfiltered.filter { true }
+    assertEquals(unfiltered.formatString(), filteredActual.formatString())
+  }
+
+  @Test
+  fun testRemoveAll() {
+    val unfiltered: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(1, 2, 3),
+      intArrayOf(0, 1, 0))
+    val filteredActual: Hierarchy = unfiltered.filter { false }
+    assertEquals("[]", filteredActual.formatString())
+  }
+
+  @Test
+  fun testRemovedDeepNodeThenBackToRoot() {
+    // 1
+    // - 2
+    // - - 3  <- removed
+    // 4      <- depth jumps from 2 back to 0
+    val unfiltered: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(1, 2, 3, 4),
+      intArrayOf(0, 1, 2, 0))
+    val filteredActual: Hierarchy = unfiltered.filter { nodeId -> nodeId != 3 }
+    val filteredExpected: Hierarchy = ArrayBasedHierarchy(
+      intArrayOf(1, 2, 4),
+      intArrayOf(0, 1, 0))
+    assertEquals(filteredExpected.formatString(), filteredActual.formatString())
+  }
+}
+
+fun main() {
+  val t = FilterTest()
+  val tests = listOf<Pair<String, () -> Unit>>(
+    "testFilter" to t::testFilter,
+    "testRemovedParentRemovesPassingChildren" to t::testRemovedParentRemovesPassingChildren,
+    "testEmptyHierarchy" to t::testEmptyHierarchy,
+    "testRemovedRootKeepsOtherTrees" to t::testRemovedRootKeepsOtherTrees,
+    "testKeepAll" to t::testKeepAll,
+    "testRemoveAll" to t::testRemoveAll,
+    "testRemovedDeepNodeThenBackToRoot" to t::testRemovedDeepNodeThenBackToRoot,
+  )
+
+  var failed = 0
+  for ((name, test) in tests) {
+    try {
+      test()
+      println("PASS  $name")
+    } catch (e: AssertionError) {
+      failed++
+      println("FAIL  $name: ${e.message}")
+    }
+  }
+  println("\n${tests.size - failed}/${tests.size} passed")
 }
