@@ -1,44 +1,45 @@
-1. memory leak : expired entries are never removed.
+# SimpleCache: Code Review Issues
 
-problem : get() function returns null for an expired entry, but leaves it. Nothing else removes entries.
+## 1. Memory leak: expired entries are never removed
 
-impact on production : every key written stays in memory during the life time of the process. we can expect GC pauses that get longer, and finally "OufOfMemoryError" can be occured (leads service down). this builds up slowly but fails after days in production.
+**Problem:** `get()` returns `null` for an expired entry, but leaves it in the map. Nothing else removes entries.
 
-2. no size limit
+**Impact on production:** Every key written stays in memory for the lifetime of the process. We can expect GC pauses to get longer, and finally an `OutOfMemoryError` can occur, which takes the service down. This builds up slowly, so it only fails after days in production.
 
-problem : there is no max number of entries.
+## 2. No size limit
 
-impact on production : if a lot of new keys arrive within one min (attacker who sends requests with random, none-repeating IDs), that can make the service down. 
-critical : 
+**Problem:** There is no maximum number of entries.
 
-3. cache stampede
+**Impact on production:** If a lot of new keys arrive within one minute (for example, an attacker sending requests with random, non-repeating IDs), memory fills up and the service can go down.
 
-problem : 
+## 3. Cache stampede
 
-when the key expires, the first request goes to the database.
-If the db takes 200ms to answer, then during 200ms, the cache still has no value for the key.
-But requests keep arriving during those 200ms and makes db many reqeusts.
+**Problem:**
 
-Fix:
-The cache should have "already loading, please wait" flag.
+- When a key expires, the first request goes to the database.
+- If the database takes 200 ms to answer, the cache still has no value for the key during those 200 ms.
+- Requests keep arriving during those 200 ms, and each one sends its own request to the database.
 
-4. size function is misleading
+**Fix:** The cache should have an "already loading, please wait" flag, so only one request loads the key and the others wait for its result.
 
-problem : size function returns cache.size that includes expired entries that get function treats as missing.
+## 4. `size()` is misleading
 
-impact on production :
-  - gives the wrong number to people
-  - people can make wrong decision on memory or server count.
+**Problem:** `size()` returns `cache.size`, which includes expired entries that `get()` treats as missing.
 
+**Impact on production:**
 
-5. nullable types make get function ambiguous
+- It gives people the wrong number.
+- People can make wrong decisions about memory or server count.
 
-problem : null has many meanings.
-for example
-  - never stored
-  - expired
-  - real answer is nothing
+## 5. Nullable types make `get()` ambiguous
 
-impact on production : 
-  - for example, every lookup whose real answer is "nothing" misses the cache every time (a user without a profile picture, ...)
-  - lookups always go to the db, even though the answer never changes.
+**Problem:** `null` has several meanings:
+
+- never stored
+- expired
+- the real answer is "nothing"
+
+**Impact on production:**
+
+- Every lookup whose real answer is "nothing" misses the cache every time (for example, a user without a profile picture).
+- These lookups always go to the database, even though the answer never changes.
