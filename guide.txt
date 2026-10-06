@@ -1,0 +1,6 @@
+Additionally, I've attached a take-home assignment with detailed instructions to this email. Please complete the assessment independently and return it within two days from today, as this is a mandatory part of the interview process.
+ 
+Please submit your work via a GitHub repository, with the link set to remain accessible to our team throughout the interview process.
+
+In your submission,
+- please also include a brief README outlining your approach, any assumptions you made, and instructions for running the project locally, if applicable.
